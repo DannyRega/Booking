@@ -1,20 +1,14 @@
-﻿using Application.Interfaces;
-using Domain.Entities;
+﻿using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Infrastructure.Persistence;
 
-public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
-    : DbContext(options), IApplicationDbContext
+public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : DbContext(options)
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<Session> Sessions => Set<Session>();
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
-
-    public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken ct)
-        => Database.BeginTransactionAsync(ct);
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -40,7 +34,6 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             b.Property(s => s.DurationMinutes).HasColumnName("duration_minutes");
             b.Property(s => s.Capacity).HasColumnName("capacity");
 
-            // Índice para optimizar filtrado por fechas y cursor
             b.HasIndex(s => s.StartsAt);
             b.HasIndex(s => s.Instructor);
         });
@@ -54,7 +47,6 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             b.Property(bk => bk.UserId).HasColumnName("user_id");
             b.Property(bk => bk.CreatedAt).HasColumnName("created_at");
 
-            // Evitar reserva duplicada por usuario en la misma sesión a nivel BD
             b.HasIndex(bk => new { bk.SessionId, bk.UserId }).IsUnique();
             b.HasIndex(bk => bk.SessionId);
             b.HasIndex(bk => bk.UserId);

@@ -1,21 +1,19 @@
-using Application.Common.Interfaces;
+using System.Security.Claims;
+using System.Text;
 using Application.DTOs;
 using Application.Interfaces;
+using Application.Services;
 using Domain.Exceptions;
 using Infrastructure.Persistence;
-using Infrastructure.Services;
+using Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using System.Security.Claims;
-using System.Text;
 
-// Cargar variables desde el archivo .env (busca recursivamente hacia la raíz)
 DotNetEnv.Env.TraversePath().Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Obtener conexión a BD desde variable de entorno (.env) o appsettings de respaldo
 var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING")
     ?? builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("DB Connection string is missing.");
@@ -23,10 +21,10 @@ var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING"
 builder.Services.AddDbContext<ApplicationDbContext>(opt =>
     opt.UseNpgsql(connectionString));
 
-builder.Services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
+// Inyección de dependencias limpia cumpliendo DIP
+builder.Services.AddScoped<IBookingRepository, BookingRepository>();
 builder.Services.AddScoped<BookingService>();
 
-// 2. Obtener clave secreta JWT desde variable de entorno (.env)
 var jwtKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
     ?? builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("JWT Secret Key is missing.");
