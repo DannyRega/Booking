@@ -110,69 +110,58 @@ function BookingDashboard() {
 
       <section>
         <ProtectedRoute>
-        <h2>Talleres Disponibles</h2>
+          <h2>Talleres Disponibles</h2>
 
-        <SessionFiltersBar
-          filters={filters}
-          onChange={setFilters}
-          onReset={handleResetFilters}
-        />
-        
-      {lastBookingId && (
-      <div style={{
-        background: '#e8f5e9',
-        border: '1px solid #c8e6c9',
-        padding: '1rem',
-        borderRadius: '6px',
-        marginBottom: '1.5rem',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <span>Tienes una reserva activa: <strong>Reserva #{lastBookingId}</strong></span>
-        <button
-          onClick={handleCancelLast}
-          disabled={isProcessing}
-          style={{
-            padding: '0.4rem 0.9rem',
-            backgroundColor: '#d32f2f',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: isProcessing ? 'not-allowed' : 'pointer',
-            fontWeight: 600
-          }}
-        >
-          {isProcessing ? 'Cancelando...' : 'Cancelar Reserva (Liberar cupo)'}
-        </button>
-      </div>
-    )}
+          <SessionFiltersBar
+            filters={filters}
+            onChange={setFilters}
+            onReset={handleResetFilters}
+          />
 
-    {/* En el mapeo de sesiones, pasar handleReserve en vez de reserve */}
-    <ul style={{ listStyle: 'none', padding: 0 }}>
-      {sessions.map((session) => (
-        <SessionItem
-          key={session.id}
-          session={session}
-          onBook={handleReserve}
-          disabled={isProcessing}
-        />
-      ))}
-    </ul>
-        
-        {loading && <p>Cargando sesiones desde la API...</p>}
-        {listError && <p style={{ color: '#d32f2f' }}>{listError}</p>}
+          {lastBookingId && (
+            <div style={{
+              background: '#e8f5e9',
+              border: '1px solid #c8e6c9',
+              padding: '1rem',
+              borderRadius: '6px',
+              marginBottom: '1.5rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <span>Tienes una reserva activa: <strong>Reserva #{lastBookingId}</strong></span>
+              <button
+                onClick={handleCancelLast}
+                disabled={isProcessing}
+                style={{
+                  padding: '0.4rem 0.9rem',
+                  backgroundColor: '#d32f2f',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: isProcessing ? 'not-allowed' : 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                {isProcessing ? 'Cancelando...' : 'Cancelar Reserva (Liberar cupo)'}
+              </button>
+            </div>
+          )}
 
-        {!loading && sessions.length === 0 && !listError && (
-          <p>No se encontraron talleres con los filtros seleccionados.</p>
-        )}
+          {loading && <p>Cargando sesiones desde la API...</p>}
+          {listError && <p style={{ color: '#d32f2f' }}>{listError}</p>}
 
+          {!loading && sessions.length === 0 && !listError && (
+            <p>No se encontraron talleres con los filtros seleccionados.</p>
+          )}
+
+          {/* LISTA DE SESIONES */}
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {sessions.map((session) => (
               <SessionItem
                 key={session.id}
                 session={session}
-                onBook={reserve}
+                onBook={handleReserve}
                 disabled={isProcessing}
               />
             ))}
