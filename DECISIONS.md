@@ -66,16 +66,16 @@ Se combinaron dos optimizaciones arquitectónicas:
 Ejecutado sobre la base de datos sembrada con 5,000 sesiones y más de 100,000 reservas:
 
 ```sql
-Limit  (cost=0.28..97.21 rows=20 width=53) (actual time=0.046..0.112 rows=20 loops=1)
-  ->  Index Scan using sessions_pkey on sessions s  (cost=0.28..24231.78 rows=5000 width=53) (actual time=0.045..0.110 rows=20 loops=1)
+Limit  (cost=0.28..97.21 rows=20 width=53) (actual time=6.139..9.116 rows=20 loops=1)
+  ->  Index Scan using sessions_pkey on sessions s  (cost=0.28..24231.78 rows=5000 width=53) (actual time=5.612..8.583 rows=20 loops=1)
         Index Cond: (id > 0)
         SubPlan 1
-          ->  Aggregate  (cost=4.79..4.80 rows=1 width=8) (actual time=0.005..0.005 rows=1 loops=20)
-                ->  Index Only Scan using idx_bookings_session_id on bookings b  (cost=0.29..4.73 rows=25 width=0) (actual time=0.001..0.004 rows=24 loops=20)
+          ->  Aggregate  (cost=4.79..4.80 rows=1 width=8) (actual time=0.394..0.394 rows=1 loops=20)
+                ->  Index Only Scan using idx_bookings_session_id on bookings b  (cost=0.29..4.73 rows=25 width=0) (actual time=0.110..0.342 rows=24 loops=20)
                       Index Cond: (session_id = s.id)
-                      Heap Fetches: 501
-Planning Time: 0.905 ms
-Execution Time: 0.202 ms
+                      Heap Fetches: 502
+Planning Time: 30.667 ms
+Execution Time: 15.333 ms
 
 ```
 
