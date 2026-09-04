@@ -6,19 +6,19 @@ using Domain.Exceptions;
 
 namespace Application.Services;
 /// <summary>
-/// Service responsible for managing bookings, including creating and canceling bookings while ensuring business rules are enforced, such as session capacity, user booking conflicts, and idempotency of requests.
+/// service class for managing bookings, including creating and canceling bookings with idempotency support.
 /// </summary>
-/// <param name="repository">The repository for managing booking data.</param>
+/// <param name="repository"></param>
 public class BookingService(IBookingRepository repository)
 {
     /// <summary>
-    /// Creates a booking for a user in a specific session, ensuring that the session has available capacity, the user does not already have a booking for that session, and that there are no overlapping bookings for the user. The method also supports idempotency to prevent duplicate bookings.
+    /// Creates a new booking for a user in a specific session, ensuring idempotency and handling various business rules such as capacity limits and overlapping bookings.
     /// </summary>
-    /// <param name="userId">The ID of the user for whom to create the booking.</param>
+    /// <param name="userId">The ID of the user creating the booking.</param>
     /// <param name="sessionId">The ID of the session for which to create the booking.</param>
-    /// <param name="idempotencyKey">An optional key to ensure idempotent requests.</param>
-    /// <param name="ct">A cancellation token.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <param name="idempotencyKey">The key for ensuring idempotency.</param>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>A tuple containing the HTTP status code and the response body.</returns>
     /// <exception cref="NotFoundException"></exception>
     public async Task<(int StatusCode, object Body)> CreateBookingAsync(
         int userId,
@@ -36,6 +36,14 @@ public class BookingService(IBookingRepository repository)
             }
         }
 
+        var alreadyBooked = await repository.HasUserBookingAsync(sessionId, userId, ct);
+        if (alreadyBooked)
+        {
+            var errorBody = new { error = "Ya tienes una reserva para esta sesión." };
+            await SaveIdempotencyIfPresentAsync(idempotencyKey, 409, errorBody, ct);
+            return (409, errorBody);
+        }
+
         await using var tx = await repository.BeginTransactionAsync(ct);
 
         var session = await repository.GetSessionForUpdateAsync(sessionId, ct)
@@ -44,18 +52,10 @@ public class BookingService(IBookingRepository repository)
         var currentBookings = await repository.CountBookingsBySessionIdAsync(sessionId, ct);
         if (currentBookings >= session.Capacity)
         {
+            await tx.RollbackAsync(ct);
+
             var errorBody = new { error = "No hay cupos disponibles para esta sesión." };
             await SaveIdempotencyIfPresentAsync(idempotencyKey, 409, errorBody, ct);
-            await tx.CommitAsync(ct);
-            return (409, errorBody);
-        }
-
-        var alreadyBooked = await repository.HasUserBookingAsync(sessionId, userId, ct);
-        if (alreadyBooked)
-        {
-            var errorBody = new { error = "Ya tienes una reserva para esta sesión." };
-            await SaveIdempotencyIfPresentAsync(idempotencyKey, 409, errorBody, ct);
-            await tx.CommitAsync(ct);
             return (409, errorBody);
         }
 
@@ -63,9 +63,10 @@ public class BookingService(IBookingRepository repository)
         var hasOverlap = await repository.HasOverlappingBookingAsync(userId, session.StartsAt, sessionEnd, ct);
         if (hasOverlap)
         {
+            await tx.RollbackAsync(ct);
+
             var errorBody = new { error = "Tienes otra sesión que se solapa en este horario." };
             await SaveIdempotencyIfPresentAsync(idempotencyKey, 409, errorBody, ct);
-            await tx.CommitAsync(ct);
             return (409, errorBody);
         }
 
@@ -79,22 +80,23 @@ public class BookingService(IBookingRepository repository)
         await repository.AddBookingAsync(booking, ct);
         await repository.SaveChangesAsync(ct);
 
+        await tx.CommitAsync(ct);
+
         var resultDto = new BookingResponseDto(booking.Id, booking.SessionId, booking.UserId, booking.CreatedAt);
         await SaveIdempotencyIfPresentAsync(idempotencyKey, 201, resultDto, ct);
 
-        await tx.CommitAsync(ct);
         return (201, resultDto);
     }
     /// <summary>
-    /// Cancels a booking for a user, ensuring that the booking exists, the user has permission to cancel it, and that the cancellation is made at least 2 hours before the session starts.
+    /// Cancels an existing booking for a user.
     /// </summary>
     /// <param name="bookingId">The ID of the booking to cancel.</param>
-    /// <param name="userId">The ID of the user who wants to cancel the booking.</param>
-    /// <param name="ct">A cancellation token.</param>
+    /// <param name="userId">The ID of the user canceling the booking.</param>
+    /// <param name="ct">The cancellation token.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    /// <exception cref="NotFoundException">Thrown when the booking is not found.</exception>
-    /// <exception cref="ForbiddenException">Thrown when the user does not have permission to cancel the booking.</exception>
-    /// <exception cref="ConflictException">Thrown when the cancellation is made too close to the session start time.</exception>
+    /// <exception cref="NotFoundException"></exception>
+    /// <exception cref="ForbiddenException"></exception>
+    /// <exception cref="ConflictException"></exception>
     public async Task CancelBookingAsync(int bookingId, int userId, CancellationToken ct = default)
     {
         var booking = await repository.GetBookingWithSessionAsync(bookingId, ct)
@@ -115,8 +117,8 @@ public class BookingService(IBookingRepository repository)
     /// <param name="key">The idempotency key.</param>
     /// <param name="status">The HTTP status code.</param>
     /// <param name="body">The response body.</param>
-    /// <param name="ct">A cancellation token.</param>
-    /// <returns></returns>
+    /// <param name="ct">The cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
     private async Task SaveIdempotencyIfPresentAsync(string? key, int status, object body, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(key)) return;
