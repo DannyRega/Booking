@@ -2,14 +2,20 @@
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Persistence;
-
+/// <summary>
+/// Represents the application's database context, providing access to the Users, Sessions, Bookings, and IdempotencyRecords tables in the database.
+/// </summary>
+/// <param name="options"></param>
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : DbContext(options)
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<Session> Sessions => Set<Session>();
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
-
+    /// <summary>
+    /// Configures the model for the database context, specifying table names, primary keys, column names, and indexes for the User, Session, Booking, and IdempotencyRecord entities.
+    /// </summary>
+    /// <param name="modelBuilder">The model builder.</param>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

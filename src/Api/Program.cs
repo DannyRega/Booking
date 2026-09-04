@@ -1,5 +1,3 @@
-using System.Security.Claims;
-using System.Text;
 using Application.DTOs;
 using Application.Interfaces;
 using Application.Services;
@@ -7,8 +5,12 @@ using Domain.Exceptions;
 using Infrastructure.Persistence;
 using Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
+using System.Security.Claims;
+using System.Text;
 
 DotNetEnv.Env.TraversePath().Load();
 
@@ -21,7 +23,7 @@ var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING"
 builder.Services.AddDbContext<ApplicationDbContext>(opt =>
     opt.UseNpgsql(connectionString));
 
-// Inyección de dependencias limpia cumpliendo DIP
+builder.Services.AddScoped<ISessionRepository, SessionRepository>();
 builder.Services.AddScoped<IBookingRepository, BookingRepository>();
 builder.Services.AddScoped<BookingService>();
 
@@ -40,11 +42,36 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
     });
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "TaskManager API", Version = "v1" });
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header
+    });
+    c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecuritySchemeReference("Bearer", doc),
+            new List<string>()
+        }
+    });
+});
 
 builder.Services.AddAuthorization();
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
-var app = builder.Build();
+var app = builder.Build(); 
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -75,44 +102,17 @@ app.MapPost("/login", (LoginRequest req) =>
 
 // GET /sessions
 app.MapGet("/sessions", async (
-    DateTime? from,
-    DateTime? to,
-    string? instructor,
-    bool? only_available,
-    int? cursor,
-    int? limit,
-    ApplicationDbContext db,
-    CancellationToken ct) =>
+    [FromQuery] DateTime? from,
+    [FromQuery] DateTime? to,
+    [FromQuery] string? instructor,
+    [FromQuery(Name = "only_available")] bool? onlyAvailable,
+    [FromQuery] int? cursor,
+    [FromQuery] int limit = 20,
+    ISessionRepository sessionRepo = null!,
+    CancellationToken ct = default) =>
 {
-    var pageSize = Math.Clamp(limit ?? 20, 1, 100);
-    var query = db.Sessions.AsNoTracking().AsQueryable();
-
-    if (from.HasValue) query = query.Where(s => s.StartsAt >= from.Value);
-    if (to.HasValue) query = query.Where(s => s.StartsAt <= to.Value);
-    if (!string.IsNullOrWhiteSpace(instructor)) query = query.Where(s => s.Instructor == instructor);
-    if (cursor.HasValue) query = query.Where(s => s.Id > cursor.Value);
-
-    var projectedQuery = query.OrderBy(s => s.Id).Select(s => new SessionResponseDto(
-        s.Id,
-        s.Title,
-        s.Instructor,
-        s.StartsAt,
-        s.DurationMinutes,
-        s.Capacity,
-        s.Capacity - db.Bookings.Count(b => b.SessionId == s.Id)
-    ));
-
-    if (only_available == true)
-    {
-        projectedQuery = projectedQuery.Where(s => s.AvailableSeats > 0);
-    }
-
-    var items = await projectedQuery.Take(pageSize + 1).ToListAsync(ct);
-    var hasNext = items.Count > pageSize;
-    var resultItems = items.Take(pageSize).ToList();
-    var nextCursor = hasNext ? resultItems.Last().Id : (int?)null;
-
-    return Results.Ok(new CursorPagedResult<SessionResponseDto>(resultItems, nextCursor, hasNext));
+    var result = await sessionRepo.GetSessionsAsync(from, to, instructor, onlyAvailable, cursor, limit, ct);
+    return Results.Ok(result);
 });
 
 // POST /bookings
@@ -150,10 +150,8 @@ app.MapDelete("/bookings/{id:int}", async (
         return Results.NoContent();
     }
     catch (NotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
-    catch (ForbiddenException ex) { return Results.Forbid(); }
+    catch (ForbiddenException) { return Results.Forbid(); }
     catch (ConflictException ex) { return Results.Conflict(new { error = ex.Message }); }
 }).RequireAuthorization();
 
 app.Run();
-
-public record LoginRequest(string Email, string Password);

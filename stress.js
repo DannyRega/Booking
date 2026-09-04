@@ -1,6 +1,5 @@
-#!/usr/bin/env node
-
 import http from 'node:http';
+import crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
 
 const args = process.argv.slice(2);
@@ -17,8 +16,8 @@ for (const arg of args) {
 
 const API_HOST = 'localhost';
 const API_PORT = 5000;
+const JWT_SECRET = 'super_secret_evaluation_key_1234567890_min32chars';
 
-// Generador de tokens JWT sintéticos válidos para múltiples user_ids (para no chocar con la regla 'un usuario por sesión')
 function generateTestToken(userId) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const payload = Buffer.from(JSON.stringify({
@@ -26,13 +25,9 @@ function generateTestToken(userId) {
     email: `stress_user_${userId}@test.com`,
     exp: Math.floor(Date.now() / 1000) + 3600
   })).toString('base64url');
-  
-  // Firma precalculada o simplificada aceptable en entorno de test/API
-  // Nota: Para HMAC real usa crypto, aquí adjuntamos firma válida para el secreto del reto:
-  import('node:crypto').then;
-  const crypto = await import('node:crypto');
+
   const signature = crypto
-    .createHmac('sha256', 'super_secret_evaluation_key_1234567890_min32chars')
+    .createHmac('sha256', JWT_SECRET)
     .update(`${header}.${payload}`)
     .digest('base64url');
 
@@ -40,7 +35,7 @@ function generateTestToken(userId) {
 }
 
 async function sendBooking(userId, sId) {
-  const token = await generateTestToken(userId);
+  const token = generateTestToken(userId);
   const data = JSON.stringify({ sessionId: sId });
 
   return new Promise((resolve) => {
@@ -69,10 +64,8 @@ async function sendBooking(userId, sId) {
 async function run() {
   console.log(`\nIniciando prueba de concurrencia: ${concurrency} peticiones sobre sesión ${sessionId}...`);
 
-  // Disparar las 200 peticiones en paralelo inmediato
   const promises = [];
   for (let i = 1; i <= concurrency; i++) {
-    // Usamos IDs de usuario distintos para aislar la regla de 'capacidad' de la de 'usuario duplicado'
     promises.push(sendBooking(i + 100, sessionId));
   }
 
@@ -94,21 +87,20 @@ async function run() {
     console.log(`  Otros        ·············  ${stats.others}`);
   }
 
-  // Comprobar conteo directo en PostgreSQL
   try {
     const sqlCmd = `docker exec booking_db psql -U postgres -d booking_db -t -c "SELECT COUNT(*) FROM bookings WHERE session_id = ${sessionId};"`;
     const count = parseInt(execSync(sqlCmd).toString().trim(), 10);
-    
+
     console.log(`\n  SELECT COUNT(*) FROM bookings WHERE session_id = ${sessionId};`);
     console.log(`  → ${count}\n`);
 
     if (count === 10 && stats[201] === 10 && stats[500] === 0) {
-      console.log('  PASS — sin sobreventa consistente');
+      console.log('  PASS — sin sobreventa consistente\n');
     } else {
-      console.log('  FAIL — sobreventa o error de ejecución detectado');
+      console.log('  FAIL — sobreventa o discrepancia detectada\n');
     }
-  } catch (err) {
-    console.log('  (Aviso: No se pudo verificar directamente con docker exec, revisa la base manualmente)');
+  } catch {
+    console.log('  (Nota: Para verificar el conteo en BD manualmente: docker exec -it booking_db psql -U postgres -d booking_db -c "SELECT COUNT(*) FROM bookings WHERE session_id = 42;")');
   }
 }
 

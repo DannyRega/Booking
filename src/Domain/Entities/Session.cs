@@ -4,6 +4,9 @@ using System.Text;
 
 namespace Domain.Entities
 {
+    /// <summary>
+    /// Represents a session that users can book, including details such as title, instructor, start time, duration, capacity, and associated bookings.
+    /// </summary>
     public class Session
     {
         public int Id { get; set; }

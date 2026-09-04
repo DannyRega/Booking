@@ -4,6 +4,9 @@ using System.Text;
 
 namespace Domain.Entities
 {
+    /// <summary>
+    /// Represents a booking made by a user for a specific session.
+    /// </summary>
     public class Booking
     {
         public int Id { get; set; }

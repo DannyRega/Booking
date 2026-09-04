@@ -4,6 +4,9 @@ using System.Text;
 
 namespace Domain.Exceptions
 {
+    /// <summary>
+    /// Represents a record of an idempotent operation, storing the key, status code, response body, and creation timestamp.
+    /// </summary>
     public class IdempotencyRecord
     {
         public string Key { get; set; } = string.Empty;
