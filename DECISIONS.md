@@ -1,4 +1,3 @@
-```markdown
 # Decisiones de Arquitectura
 
 ## 1. Sobreventa
