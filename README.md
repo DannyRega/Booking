@@ -1,4 +1,3 @@
-```markdown
 # Plataforma de Reserva de Talleres
 
 Solución de alta concurrencia y prevención de sobreventa de cupos para una plataforma de reserva de talleres presenciales. Desarrollada con **.NET 10** en el backend y **React 19 (TypeScript + Vite)** en el frontend, respaldada por **PostgreSQL 16**.
