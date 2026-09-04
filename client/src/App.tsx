@@ -77,7 +77,7 @@ function BookingDashboard() {
       <header style={{ borderBottom: '2px solid #eee', paddingBottom: '1rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '1.8rem' }}>Plataforma de Talleres</h1>
-          <p style={{ margin: '0.2rem 0 0 0', color: '#666' }}>Sistema de reservas con control de concurrencia</p>
+          <p style={{ margin: '0.2rem 0 0 0', color: '#666' }}>Sistema de reservas</p>
         </div>
 
         <div>

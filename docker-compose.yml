@@ -1,7 +1,10 @@
 services:
-  postgres:
+  db:
     image: postgres:16-alpine
     container_name: booking_db
+    restart: always
+    shm_size: 256mb
+    command: postgres -c max_connections=300
     environment:
       POSTGRES_DB: booking_db
       POSTGRES_USER: postgres
@@ -9,9 +12,38 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
       - ./schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
       - ./seed.sql:/docker-entrypoint-initdb.d/02_seed.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d booking_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-volumes:
-  pgdata:
+  api:
+    build:
+      context: .
+      dockerfile: src/Api/Dockerfile
+    container_name: booking_api
+    restart: always
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=5000
+      - DB_CONNECTION_STRING=Host=db;Port=5432;Database=booking_db;Username=postgres;Password=postgrespassword;Maximum Pool Size=300;Timeout=60;Command Timeout=60;
+      - JWT_SECRET_KEY=super_secret_evaluation_key_1234567890_min32chars
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: booking_client
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - api

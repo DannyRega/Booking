@@ -1,0 +1,68 @@
+name: CI / Concurrency Quality Gate
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: booking_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+
+      - name: Run Backend Tests
+        run: dotnet test --verbosity normal
+
+      - name: Build Frontend
+        working-directory: ./client
+        run: |
+          npm ci
+          npm run build
+
+      - name: Seed Database
+        run: |
+          PGPASSWORD=postgrespassword psql -h localhost -U postgres -d booking_db -f schema.sql
+          PGPASSWORD=postgrespassword psql -h localhost -U postgres -d booking_db -f seed.sql
+          PGPASSWORD=postgrespassword psql -h localhost -U postgres -d booking_db -c "INSERT INTO users (id, email, password_hash) SELECT g, 'stress_' || g || '@test.com', 'pwd' FROM generate_series(1, 500) g ON CONFLICT (id) DO NOTHING;"
+
+      - name: Run API in background
+        env:
+          DB_CONNECTION_STRING: "Host=localhost;Port=5432;Database=booking_db;Username=postgres;Password=postgrespassword;Maximum Pool Size=300;"
+          JWT_SECRET: "super_secret_evaluation_key_1234567890_min32chars"
+        run: |
+          dotnet run --project src/Api --urls "http://localhost:5000" &
+          sleep 5
+
+      - name: Run Concurrency Stress Test
+        run: node stress.js --session=42 --concurrency=200
